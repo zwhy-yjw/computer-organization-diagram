@@ -1,0 +1,2214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>计算机组成原理 · 主板结构拆解可视化</title>
+
+<!-- 不引入图片或字体文件；字体使用系统无衬线字体，确保单文件可运行 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a1830'/%3E%3Cpath d='M32 10 54 22v20L32 54 10 42V22z' fill='none' stroke='%234dd7ff' stroke-width='3'/%3E%3Crect x='24' y='24' width='16' height='16' rx='3' fill='%234dd7ff'/%3E%3C/svg%3E" />
+
+<!-- Three.js r187（最新稳定版，直接指向 GitHub 官方仓库文件）
+     如需完全离线运行，只需将下面两个地址替换为本地 vendor 路径。 -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r187/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r187/examples/jsm/"
+  }
+}
+</script>
+<!-- TWEEN.js v25.0.0（最新稳定版，来源 GitHub：tweenjs/tween.js） -->
+<script src="https://cdn.jsdelivr.net/gh/tweenjs/tween.js@v25.0.0/dist/tween.umd.js"></script>
+
+<style>
+  /* ===================== 全局样式 ===================== */
+  :root{
+    --bg:        #070b16;
+    --panel:     rgba(13,21,38,.72);
+    --panel-2:   rgba(17,28,50,.86);
+    --border:    rgba(96,160,255,.18);
+    --border-hi: rgba(96,190,255,.42);
+    --cyan:      #4dd7ff;
+    --cyan-2:    #9aeaff;
+    --amber:     #ffb454;
+    --text:      #dfeaff;
+    --muted:     #7d93b8;
+    --shadow:    0 18px 50px rgba(0,0,0,.55);
+    --mono:      "Cascadia Code","SF Mono",Consolas,monospace;
+    --font:      "Bahnschrift","DIN Alternate","Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:var(--font); }
+  body{
+    background:
+      radial-gradient(1200px 700px at 50% 22%, rgba(24,58,110,.35), transparent 62%),
+      radial-gradient(900px 520px at 78% 88%, rgba(12,66,120,.28), transparent 60%),
+      var(--bg);
+  }
+  canvas#scene{ position:fixed; inset:0; width:100%; height:100%; display:block; outline:none; }
+
+  /* 顶部玻璃反光 + 暗角，增强科技感 */
+  .vignette{ position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(120% 95% at 50% 45%, transparent 52%, rgba(2,5,12,.72) 100%); }
+  .scanlines{ position:fixed; inset:0; pointer-events:none; opacity:.16; mix-blend-mode:overlay;
+    background:repeating-linear-gradient(0deg, rgba(120,190,255,.10) 0 1px, transparent 1px 3px); }
+
+  /* ===================== 顶部标题栏 ===================== */
+  .brand{ position:fixed; top:26px; left:28px; display:flex; align-items:center; gap:14px; z-index:20; }
+  .brand .logo{ width:46px; height:46px; border-radius:13px; flex:none;
+    background:linear-gradient(150deg,#123252,#0c1c31); border:1px solid var(--border-hi);
+    display:grid; place-items:center; box-shadow:0 0 26px rgba(60,150,255,.32), inset 0 1px 0 rgba(160,220,255,.18); }
+  .brand .logo i{ width:14px; height:14px; border-radius:50%; background:var(--cyan); box-shadow:0 0 16px var(--cyan); display:block; }
+  .brand h1{ font-size:26px; font-weight:700; letter-spacing:.5px; line-height:1.1; }
+  .brand .sub{ font-size:11px; letter-spacing:4.2px; color:var(--muted); text-transform:uppercase; margin-top:3px; }
+
+  /* 右上快捷按钮（参考图样式） */
+  .quick{ position:fixed; top:30px; right:28px; display:flex; gap:10px; z-index:20; }
+  .qbtn{ padding:10px 18px; border-radius:11px; font-size:13.5px; letter-spacing:.6px; cursor:pointer;
+    color:#cfe6ff; background:rgba(18,34,58,.72); border:1px solid var(--border);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); transition:.22s; font-family:var(--font); }
+  .qbtn:hover{ border-color:var(--border-hi); background:rgba(30,64,110,.85); transform:translateY(-2px);
+    box-shadow:0 10px 26px rgba(20,90,180,.35); }
+  .qbtn.on{ background:linear-gradient(160deg,#2f95d8,#1c6bb0); border-color:#63c6ff; color:#fff;
+    box-shadow:0 10px 28px rgba(46,150,225,.5); }
+
+  /* ===================== 玻璃拟态面板 ===================== */
+  .panel{
+    position:fixed; z-index:15; border-radius:18px;
+    background:linear-gradient(165deg, var(--panel-2), var(--panel));
+    border:1px solid var(--border); box-shadow:var(--shadow);
+    backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%);
+  }
+  .panel::before{ content:""; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(130,190,255,.10), transparent 38%); }
+
+  /* ---------- 左侧：部件清单 ---------- */
+  .panel-left{ left:26px; top:92px; width:306px; bottom:64px; display:flex; flex-direction:column; overflow:hidden; }
+  .p-head{ padding:9px 18px 6px; display:flex; align-items:flex-end; justify-content:space-between; }
+  .p-head h2{ font-size:18px; font-weight:700; letter-spacing:1.2px; }
+  .p-head .num{ font-family:var(--mono); font-size:13px; color:var(--cyan); letter-spacing:1px; }
+  .p-head .num b{ color:#fff; font-size:17px; }
+  .divider{ height:1px; background:linear-gradient(90deg, transparent, var(--border-hi), transparent); margin:0 16px; }
+  .list{ overflow-y:auto; padding:4px 10px 6px; scrollbar-width:thin; scrollbar-color:rgba(90,160,255,.4) transparent; }
+  .list::-webkit-scrollbar{ width:5px; }
+  .list::-webkit-scrollbar-thumb{ background:rgba(90,160,255,.36); border-radius:8px; }
+  .cat{ font-size:10.5px; letter-spacing:2.2px; color:var(--cyan); text-transform:uppercase;
+    padding:5px 10px 2px; opacity:.92; display:flex; align-items:center; gap:8px; }
+  .cat i{ width:5px; height:5px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .cat span{ color:var(--muted); letter-spacing:1.4px; font-size:10.5px; }
+  .item{ display:flex; align-items:center; gap:8px; padding:2px 9px; border-radius:10px; cursor:pointer;
+    border:1px solid transparent; transition:.2s; position:relative; }
+  .item:hover{ background:rgba(40,92,158,.24); border-color:rgba(96,180,255,.24); transform:translateX(3px); }
+  .item.active{ background:linear-gradient(100deg, rgba(46,140,224,.34), rgba(30,80,150,.16));
+    border-color:rgba(110,200,255,.5); box-shadow:0 8px 26px rgba(30,110,200,.32); }
+  .item.active::after{ content:""; position:absolute; left:0; top:12%; bottom:12%; width:2px; border-radius:3px;
+    background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
+  .item .no{ font-family:var(--mono); font-size:11px; color:var(--cyan); opacity:.85; width:20px; flex:none; }
+  .item.active .no{ color:#fff; opacity:1; }
+  .item .txt{ flex:1; min-width:0; }
+  .item .cn{ font-size:12.5px; font-weight:600; letter-spacing:.3px; color:#e6f0ff; white-space:nowrap; }
+  .item .en{ font-size:8.4px; letter-spacing:.9px; color:var(--muted); text-transform:uppercase;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .dot{ width:6px; height:6px; border-radius:50%; flex:none;
+    background:rgba(120,170,230,.30); border:1px solid rgba(140,200,255,.35); transition:.2s; }
+  .item .dot.done{ background:#63e4bc; border-color:transparent; box-shadow:0 0 10px rgba(70,255,200,.75); }
+  .item.active .dot.done{ background:#8cffdd; box-shadow:0 0 14px rgba(80,255,205,.95); }
+  .item.active .dot, .item:hover .dot{ background:var(--cyan); box-shadow:0 0 12px var(--cyan); border-color:transparent; }
+
+  /* ---------- 右侧：总览参数卡 ---------- */
+  .panel-right{ right:26px; top:92px; width:324px; padding:15px 18px 13px;
+    max-height:calc(100vh - 154px); overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(90,160,255,.35) transparent; }
+  .eyebrow{ font-family:var(--mono); font-size:10.5px; letter-spacing:4.4px; color:var(--cyan); text-transform:uppercase; }
+  .panel-right h2{ font-size:25px; font-weight:700; margin:6px 0 7px; letter-spacing:1px; }
+  .lead{ font-size:11.3px; line-height:1.64; color:#a9bdd8; }
+  .spec{ margin-top:9px; border-top:1px solid var(--border); }
+  .row{ display:flex; align-items:center; justify-content:space-between; padding:6px 2px;
+    border-bottom:1px solid rgba(96,160,255,.11); font-size:11.7px; }
+  .row .k{ color:#93a9c8; letter-spacing:.8px; }
+  .row .v{ font-family:var(--mono); font-size:13px; color:#d8ecff; letter-spacing:.6px; }
+
+  .sel-card{ margin-top:9px; padding:10px 13px; border-radius:14px;
+    background:linear-gradient(160deg, rgba(30,72,128,.42), rgba(18,36,66,.5));
+    border:1px solid rgba(100,180,255,.26); }
+  .sel-card .tag{ font-family:var(--mono); font-size:10px; letter-spacing:2.6px; color:var(--amber); }
+  .sel-card .name{ font-size:17px; font-weight:700; margin:4px 0 2px; }
+  .sel-card .name em{ font-style:normal; font-family:var(--mono); font-size:11px; color:var(--cyan); letter-spacing:1.6px; }
+  .sel-card .desc{ font-size:11px; line-height:1.6; color:#b6c8e2; margin-top:8px; }
+  .sel-card .exam{ margin-top:7px; padding-top:7px; border-top:1px dashed rgba(120,180,255,.22);
+    font-size:10.5px; line-height:1.6; color:#8fe0ff; }
+  .sel-card .exam b{ color:var(--amber); font-weight:600; letter-spacing:1px; }
+
+  .bus-legend{ display:flex; align-items:center; gap:10px; margin-top:6px; padding:5px 8px;
+    border:1px solid rgba(96,160,255,.12); border-radius:8px; background:rgba(8,20,36,.4);
+    font-size:9.5px; letter-spacing:.4px; color:#8fa8c8; }
+  .bus-legend span{ display:flex; align-items:center; gap:4px; }
+  .bus-legend i{ display:block; width:13px; height:3px; border-radius:2px; box-shadow:0 0 7px currentColor; }
+  .prog-wrap{ margin-top:9px; }
+  .prog-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:11px; letter-spacing:2px; color:var(--muted); }
+  .prog-top b{ font-family:var(--mono); color:#fff; font-size:14px; letter-spacing:1px; }
+  .prog{ height:5px; border-radius:6px; background:rgba(90,150,225,.18); margin-top:8px; overflow:hidden; }
+  .prog i{ display:block; height:100%; width:0%; border-radius:6px;
+    background:linear-gradient(90deg,#2fa8ff,#7ef0ff); box-shadow:0 0 12px rgba(90,210,255,.8); transition:width .5s ease; }
+
+  /* 数据通路阶段指示 */
+  .stages{ margin-top:10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .stage{ font-size:11px; letter-spacing:1px; padding:5px 10px; border-radius:999px;
+    color:#95b2d4; background:rgba(80,140,220,.14); border:1px solid rgba(110,180,255,.18); transition:.25s; }
+  .stage.on{ color:#04121f; background:linear-gradient(120deg,#7ef0ff,#38b6ff); border-color:transparent;
+    box-shadow:0 6px 18px rgba(70,190,255,.5); font-weight:700; }
+  .stage-sep{ color:rgba(120,180,255,.5); font-size:11px; }
+
+  /* ---------- 底部控制栏 ---------- */
+  .control-bar{ position:fixed; left:50%; bottom:64px; transform:translateX(-50%); z-index:20;
+    display:flex; gap:11px; padding:12px 14px; border-radius:17px;
+    background:linear-gradient(165deg, rgba(18,32,56,.86), rgba(12,22,40,.78));
+    border:1px solid var(--border); box-shadow:var(--shadow);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+  .btn{ padding:11px 21px; border-radius:11px; font-size:13.5px; letter-spacing:1.2px; cursor:pointer;
+    color:#cfe4ff; background:rgba(34,66,110,.5); border:1px solid rgba(96,160,255,.24);
+    display:flex; align-items:center; gap:8px; transition:.22s; font-family:var(--font); white-space:nowrap; }
+  .btn svg{ width:15px; height:15px; opacity:.9; }
+  .btn:hover{ transform:translateY(-2px); background:rgba(52,104,172,.62); border-color:var(--border-hi);
+    box-shadow:0 12px 28px rgba(30,110,210,.4); }
+  .btn.primary{ background:linear-gradient(160deg,#41b6f2,#2179c9); color:#fff; border-color:#7cd2ff; font-weight:700;
+    box-shadow:0 12px 30px rgba(40,150,235,.46); }
+  .btn.primary:hover{ filter:brightness(1.12); }
+  .btn.on{ background:linear-gradient(160deg,#2fb5ff,#1b74c4); color:#fff; border-color:#7cd2ff;
+    box-shadow:0 12px 30px rgba(40,150,235,.46); }
+  .btn.ghost{ background:rgba(22,40,68,.42); }
+
+  .hint-bar{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:19;
+    display:flex; align-items:center; gap:16px; padding:8px 18px; border-radius:999px;
+    background:rgba(14,26,46,.55); border:1px solid rgba(96,160,255,.14);
+    font-size:11px; letter-spacing:1.4px; color:#7b93b6; white-space:nowrap;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  .hint-bar b{ color:#a9c8ea; font-weight:600; }
+  .hint-bar .sep{ width:4px; height:4px; border-radius:50%; background:rgba(110,180,255,.4); }
+
+  /* 部件浮动标签（跟随 3D 部件投影位置） */
+  #partLabel{ position:fixed; z-index:18; pointer-events:none; opacity:0; transform:translate(-50%,-140%);
+    padding:7px 13px; border-radius:10px; white-space:nowrap;
+    background:rgba(16,32,58,.9); border:1px solid rgba(110,200,255,.45);
+    box-shadow:0 10px 28px rgba(0,0,0,.5), 0 0 22px rgba(60,170,255,.28);
+    font-size:11.7px; letter-spacing:1px; color:#e8f5ff; transition:opacity .22s; }
+  #partLabel em{ font-style:normal; font-family:var(--mono); font-size:10px; color:var(--cyan); margin-left:8px; letter-spacing:1.4px; }
+
+  /* 角标装饰 */
+  .corner{ position:fixed; width:34px; height:34px; border:1px solid rgba(96,170,255,.28); z-index:12; pointer-events:none; }
+  .c-tl{ top:16px; left:16px; border-right:0; border-bottom:0; }
+  .c-tr{ top:16px; right:16px; border-left:0; border-bottom:0; }
+  .c-bl{ bottom:16px; left:16px; border-right:0; border-top:0; }
+  .c-br{ bottom:16px; right:16px; border-left:0; border-top:0; }
+
+  /* 错误提示（仅在 CDN 加载失败时出现） */
+  #err{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:99; display:none;
+    padding:20px 26px; border-radius:14px; background:rgba(40,16,22,.92); border:1px solid rgba(255,110,110,.5);
+    color:#ffd7d7; font-size:13px; line-height:1.9; max-width:520px; text-align:center; }
+
+  /* 响应式：窄屏时收起右侧参数卡 */
+  @media (max-width: 1280px){
+    .panel-right{ width:286px; }
+    .panel-left{ width:272px; }
+    .brand h1{ font-size:22px; }
+  }
+  @media (max-width: 1024px){
+    .panel-right{ display:none; }
+    .quick .qbtn:nth-child(n+3){ display:none; }
+    .btn span{ display:none; }
+    .btn{ padding:11px 15px; }
+  }
+
+  /* ===================== 启动层 / 错误层 ===================== */
+  #boot{ position:fixed; inset:0; z-index:300; display:grid; place-items:center;
+    background:
+      radial-gradient(800px 520px at 50% 42%, rgba(18,68,125,.25), transparent 68%),
+      #050810;
+    transition:opacity .6s ease, visibility .6s ease; }
+  #boot.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  .boot-card{ width:360px; text-align:center; padding:30px 28px 26px; border-radius:18px;
+    background:linear-gradient(165deg,rgba(17,32,56,.82),rgba(9,17,31,.9));
+    border:1px solid rgba(91,170,255,.28); box-shadow:0 24px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(160,225,255,.12);
+    backdrop-filter:blur(18px); }
+  .boot-mark{ width:58px; height:58px; margin:0 auto 17px; border-radius:15px; position:relative;
+    background:linear-gradient(145deg,rgba(60,175,255,.28),rgba(10,35,65,.45));
+    border:1px solid rgba(100,210,255,.5); box-shadow:0 0 34px rgba(50,165,255,.32); }
+  .boot-mark::before{ content:""; position:absolute; inset:15px; border-radius:6px;
+    background:linear-gradient(135deg,#68e4ff,#2388e8); box-shadow:0 0 20px rgba(70,200,255,.8); }
+  .boot-mark::after{ content:""; position:absolute; inset:7px; border-radius:11px;
+    border:1px dashed rgba(120,220,255,.35); animation:bootSpin 5s linear infinite; }
+  @keyframes bootSpin{ to{ transform:rotate(360deg); } }
+  .boot-title{ font-size:15px; letter-spacing:4.5px; font-weight:700; color:#dff5ff; }
+  .boot-sub{ margin-top:7px; font-family:var(--mono); font-size:9.5px; letter-spacing:2.1px; color:#6484a8; }
+  .boot-bar{ margin-top:22px; height:2px; border-radius:4px; background:rgba(80,160,255,.15); overflow:hidden; }
+  .boot-bar i{ display:block; width:42%; height:100%; border-radius:4px;
+    background:linear-gradient(90deg,transparent,#6de8ff,transparent); animation:bootScan 1.5s ease-in-out infinite; }
+  @keyframes bootScan{ 0%{ transform:translateX(-120%); } 100%{ transform:translateX(360%); } }
+
+  #err{ display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    background:rgba(26,13,20,.94); border-color:rgba(255,110,110,.55); box-shadow:0 24px 80px rgba(0,0,0,.7); }
+  #err .err-title{ font-size:16px; font-weight:700; letter-spacing:1px; color:#ffd9d9; }
+  #err .err-msg{ max-width:460px; font-size:11.7px; line-height:1.8; color:#eab9b9; }
+  #err button{ margin-top:4px; padding:8px 20px; border-radius:8px; border:1px solid rgba(255,150,150,.45);
+    background:rgba(110,35,45,.5); color:#ffe7e7; font-family:var(--font); cursor:pointer; letter-spacing:1px; }
+  #err button:hover{ background:rgba(150,50,60,.65); }
+
+  @media (max-width: 900px){
+    .panel-left{ width:248px; }
+    .panel-right{ display:none; }
+    .brand{ top:18px; left:18px; }
+    .brand .logo{ width:38px; height:38px; }
+    .brand h1{ font-size:20px; }
+    .brand .sub{ font-size:8.5px; letter-spacing:3px; }
+    .quick{ top:20px; right:18px; }
+    .control-bar{ bottom:56px; padding:9px 10px; gap:7px; max-width:calc(100vw - 24px); flex-wrap:wrap; justify-content:center; }
+    .btn{ padding:9px 12px; font-size:11.7px; letter-spacing:.6px; }
+    .btn span{ display:none; }
+    .hint-bar{ display:none; }
+  }
+  @media (max-width: 620px){
+    .panel-left{ display:none; }
+    .quick{ display:none; }
+    .control-bar{ bottom:20px; }
+  }
+
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-card">
+    <div class="boot-mark"></div>
+    <div class="boot-title">SYSTEM INITIALIZING</div>
+    <div class="boot-sub">MOUNTING 16 MODULES · LINKING THREE.JS r187</div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+</div>
+
+<canvas id="scene"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="corner c-tl"></div><div class="corner c-tr"></div>
+<div class="corner c-bl"></div><div class="corner c-br"></div>
+
+<!-- 顶部品牌 -->
+<div class="brand">
+  <div class="logo"><i></i></div>
+  <div>
+    <h1>微型计算机主板</h1>
+    <div class="sub">COMPUTER ORGANIZATION · 408 / EXPLODED VIEW</div>
+  </div>
+</div>
+
+<!-- 右上快捷按钮 -->
+<div class="quick">
+  <button class="qbtn" id="q-explode">拆解全部</button>
+  <button class="qbtn" id="q-reset-parts">全部复位</button>
+  <button class="qbtn" id="q-rotate">自动旋转</button>
+  <button class="qbtn" id="q-view">重置视角</button>
+</div>
+
+<!-- 左侧：部件清单 -->
+<div class="panel panel-left">
+  <div class="p-head">
+    <h2>部件清单</h2>
+    <div class="num"><b id="listDone">0</b> / 16</div>
+  </div>
+  <div class="divider"></div>
+  <div class="list" id="partList"><!-- JS 动态生成 --></div>
+</div>
+
+<!-- 右侧：整机总览 -->
+<div class="panel panel-right">
+  <div class="eyebrow">DEVICE OVERVIEW</div>
+  <h2>整机总览</h2>
+  <div class="lead">点击 3D 模型上的任意部件，或选择左侧清单查看结构参数。点击 <b style="color:#7fe6ff">高亮数据流</b> 观察「取指 → 译码 → 执行」的数据通路。</div>
+
+  <div class="spec">
+    <div class="row"><span class="k">主板规格</span><span class="v">ATX</span></div>
+    <div class="row"><span class="k">整机尺寸</span><span class="v">305 × 244 × 42 mm</span></div>
+    <div class="row"><span class="k">制程工艺</span><span class="v">5 nm</span></div>
+    <div class="row"><span class="k">三级缓存</span><span class="v">L1 64K · L2 512K · L3 16M</span></div>
+    <div class="row"><span class="k">内存规格</span><span class="v">DDR5-6400 / 32 GB</span></div>
+    <div class="row"><span class="k">总线带宽</span><span class="v">128 bit</span></div>
+    <div class="row"><span class="k">渲染帧率</span><span class="v"><span id="fpsVal">60</span> FPS</span></div>
+  </div>
+  <div class="bus-legend">
+    <span><i style="background:#ff5d5d;color:#ff5d5d"></i>控制总线</span>
+    <span><i style="background:#ffc247;color:#ffc247"></i>地址总线</span>
+    <span><i style="background:#4dff8c;color:#4dff8c"></i>数据总线</span>
+  </div>
+
+  <!-- 当前选中部件 -->
+  <div class="sel-card">
+    <div class="tag" id="selTag">SYSTEM OVERVIEW</div>
+    <div class="name"><span id="selCn">整机总览</span> <em id="selEn">SYSTEM OVERVIEW</em></div>
+    <div class="desc" id="selDesc">微型计算机由运算器、控制器、存储器、输入 / 输出设备与系统总线构成。点击任意部件，查看其在数据通路中的作用。</div>
+    <div class="exam"><b>408 考点</b> · <span id="selExam">冯·诺依曼结构的核心是「存储程序」：指令与数据以同等地位存放在存储器中，并可按地址访问。</span></div>
+  </div>
+
+  <!-- 拆解进度 -->
+  <div class="prog-wrap">
+    <div class="prog-top"><span>拆解进度 / EXPLODE PROGRESS</span><b><span id="progNum">0</span>/16</b></div>
+    <div class="prog"><i id="progBar"></i></div>
+    <div class="stages" id="stageRow">
+      <div class="stage" data-stage="0">取指</div><div class="stage-sep">→</div>
+      <div class="stage" data-stage="1">译码</div><div class="stage-sep">→</div>
+      <div class="stage" data-stage="2">执行</div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部控制栏 -->
+<div class="control-bar">
+  <button class="btn primary" id="btn-explode">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l4 4M15 15l4 4M19 5l-4 4M9 15l-4 4"/></svg>
+    <span>一键拆解</span>
+  </button>
+  <button class="btn ghost" id="btn-reset">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+    <span>复位视角</span>
+  </button>
+  <button class="btn ghost" id="btn-rotate">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+    <span>自动旋转</span>
+  </button>
+  <button class="btn ghost" id="btn-flow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+    <span>高亮数据流</span>
+  </button>
+  <button class="btn ghost" id="btn-iso">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    <span>等距视角</span>
+  </button>
+</div>
+
+<div class="hint-bar">
+  <span><b>拖拽</b> 旋转</span><span class="sep"></span>
+  <span><b>滚轮</b> 缩放</span><span class="sep"></span>
+  <span><b>右键</b> 平移</span><span class="sep"></span>
+  <span><b>点击部件</b> 选中 / 高亮</span><span class="sep"></span>
+  <span><b>空格</b> 数据流</span><span class="sep"></span>
+  <span><b>E</b> 拆解 / <b>R</b> 视角</span>
+</div>
+
+<div id="partLabel"></div>
+<div id="err">
+  <div class="err-title">⚠ THREE.JS / TWEEN.JS 加载失败</div>
+  <div class="err-msg" id="errMsg">无法连接 GitHub CDN。请确认网络可以访问 cdn.jsdelivr.net 的 GitHub 文件服务，然后重试。</div>
+  <button id="errRetry" type="button">重新加载</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =====================================================================
+ * 0. 加载层 / TWEEN 兜底
+ * ===================================================================== */
+const bootEl = document.getElementById('boot');
+const errEl = document.getElementById('err');
+const errMsgEl = document.getElementById('errMsg');
+
+function showError(message) {
+  if (bootEl) bootEl.classList.add('hide');
+  if (errEl) errEl.style.display = 'flex';
+  if (errMsgEl && message) errMsgEl.textContent = String(message).slice(0, 260);
+}
+
+function createTweenFallback() {
+  const active = new Set();
+  const api = {
+    update(now = performance.now()) { for (const t of [...active]) t._step(now); },
+    removeAll() { active.clear(); },
+  };
+  class Tween {
+    constructor(obj) {
+      this.obj = obj;
+      this._delay = 0;
+      this._dur = 800;
+      this._ease = (x) => x;
+      this._from = null;
+      this._target = {};
+    }
+    to(target, dur) { this._target = target; this._dur = dur || 800; return this; }
+    delay(d) { this._delay = d; return this; }
+    easing(fn) { this._ease = fn; return this; }
+    onUpdate(fn) { this._onUpdate = fn; return this; }
+    onComplete(fn) { this._onComplete = fn; return this; }
+    start() { this._start = performance.now(); this._from = null; active.add(this); return this; }
+    stop() { active.delete(this); }
+    _step(now) {
+      let p = (now - this._start - this._delay) / this._dur;
+      if (p < 0) return;
+      if (p > 1) p = 1;
+      const e = this._ease(p);
+      if (!this._from) {
+        this._from = {};
+        for (const k in this._target) this._from[k] = this.obj[k];
+      }
+      for (const k in this._target) this.obj[k] = this._from[k] + (this._target[k] - this._from[k]) * e;
+      if (this._onUpdate) this._onUpdate(e);
+      if (p >= 1) {
+        active.delete(this);
+        if (this._onComplete) this._onComplete();
+      }
+    }
+  }
+  api.Tween = Tween;
+  api.Easing = {
+    Linear: { None: (x) => x },
+    Quadratic: { In: (x) => x * x, Out: (x) => 1 - (1 - x) ** 2, InOut: (x) => x < .5 ? 2 * x * x : 1 - ((-2 * x + 2) ** 2) / 2 },
+    Cubic: { In: (x) => x ** 3, Out: (x) => 1 - (1 - x) ** 3, InOut: (x) => x < .5 ? 4 * x ** 3 : 1 - ((-2 * x + 2) ** 3) / 2 },
+    Sinusoidal: { InOut: (x) => -(Math.cos(Math.PI * x) - 1) / 2 },
+  };
+  return api;
+}
+const TWEEN = window.TWEEN || createTweenFallback();
+const EASE_IO = (TWEEN.Easing && TWEEN.Easing.Cubic && TWEEN.Easing.Cubic.InOut) || ((x) => x);
+const EASE_OUT = (TWEEN.Easing && TWEEN.Easing.Quadratic && TWEEN.Easing.Quadratic.Out) || ((x) => x);
+
+// TWEEN v25 不再自动把 Tween 加入默认 Group，这里做一层兼容封装。
+// 这样页面既能使用官方 TWEEN v25，也能在 CDN 失败时使用内部 fallback。
+const makeTween = (object) => {
+  const t = new TWEEN.Tween(object);
+  if (typeof TWEEN.add === 'function') TWEEN.add(t);
+  return t;
+};
+
+/* =====================================================================
+ * 1. 基本渲染环境
+ * ===================================================================== */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: false,
+  powerPreference: 'high-performance',
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.shadowMap.enabled = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050810);
+scene.fog = new THREE.FogExp2(0x050810, 0.0085);
+
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 180);
+const HOME_POS = new THREE.Vector3(19.5, 17.6, 23.0);
+const HOME_TARGET = new THREE.Vector3(0, 1.9, 0);
+camera.position.copy(HOME_POS);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.065;
+controls.target.copy(HOME_TARGET);
+controls.minDistance = 13;
+controls.maxDistance = 48;
+controls.maxPolarAngle = Math.PI * 0.496;
+controls.minPolarAngle = 0.14;
+controls.enablePan = true;
+controls.screenSpacePanning = true;
+controls.autoRotateSpeed = 0.52;
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0x477bb8, 0x03050a, 0.95));
+const keyLight = new THREE.DirectionalLight(0xd9e9ff, 2.5);
+keyLight.position.set(13, 20, 12);
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x2a9fff, 1.15);
+rimLight.position.set(-14, 9, -12);
+scene.add(rimLight);
+const warmLight = new THREE.PointLight(0xffb15f, 95, 44, 2);
+warmLight.position.set(-8, 7, 8);
+scene.add(warmLight);
+const coolLight = new THREE.PointLight(0x2f7fff, 65, 36, 2);
+coolLight.position.set(8, 5, -7);
+scene.add(coolLight);
+
+/* =====================================================================
+ * 2. 深色科技底座 / 网格 / 光环
+ * ===================================================================== */
+const floorGroup = new THREE.Group();
+scene.add(floorGroup);
+
+const grid = new THREE.GridHelper(74, 74, 0x2f76d8, 0x12325a);
+grid.material.transparent = true;
+grid.material.opacity = 0.36;
+grid.position.y = -0.02;
+floorGroup.add(grid);
+
+const fineGrid = new THREE.GridHelper(37, 74, 0x3b8fe8, 0x1a4b84);
+fineGrid.material.transparent = true;
+fineGrid.material.opacity = 0.13;
+fineGrid.position.y = 0.002;
+floorGroup.add(fineGrid);
+
+for (const [radius, color, opacity] of [
+  [10.8, 0x3b9cff, 0.58],
+  [14.5, 0x2f7ae0, 0.36],
+  [18.9, 0x2258b0, 0.22],
+  [24, 0x16396f, 0.14],
+]) {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(radius, radius + 0.055, 180),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.012;
+  floorGroup.add(ring);
+}
+
+for (let i = 0; i < 4; i += 1) {
+  const line = new THREE.Mesh(
+    new THREE.PlaneGeometry(50, 0.045),
+    new THREE.MeshBasicMaterial({ color: 0x2a68c0, transparent: true, opacity: 0.2, depthWrite: false }),
+  );
+  line.rotation.x = -Math.PI / 2;
+  line.rotation.z = Math.PI / 4 + i * Math.PI / 2;
+  line.position.y = 0.014;
+  floorGroup.add(line);
+}
+
+(function makeFloorGlow() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(256, 256, 0, 256, 256, 256);
+  grd.addColorStop(0, 'rgba(67,156,255,0.5)');
+  grd.addColorStop(0.34, 'rgba(35,102,205,0.19)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 512, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(48, 48),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = 0.02;
+  floorGroup.add(glow);
+})();
+
+// 环形刻度
+(function makeTicks() {
+  const verts = [];
+  for (let i = 0; i < 64; i += 1) {
+    const a = i / 64 * Math.PI * 2;
+    const r1 = i % 4 === 0 ? 11.65 : 11.95;
+    const r2 = 12.35;
+    verts.push(Math.cos(a) * r1, 0.018, Math.sin(a) * r1);
+    verts.push(Math.cos(a) * r2, 0.018, Math.sin(a) * r2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  const ticks = new THREE.LineSegments(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0x3b90ff, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  floorGroup.add(ticks);
+})();
+
+// 悬浮微粒
+const dust = (() => {
+  const n = 180;
+  const positions = new Float32Array(n * 3);
+  let seed = 918273;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  for (let i = 0; i < n; i += 1) {
+    const a = rand() * Math.PI * 2;
+    const r = 9 + rand() * 16;
+    positions[i * 3] = Math.cos(a) * r;
+    positions[i * 3 + 1] = 0.6 + rand() * 10;
+    positions[i * 3 + 2] = Math.sin(a) * r;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const points = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({
+      color: 0x62b9ff,
+      size: 0.035,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+    }),
+  );
+  scene.add(points);
+  return points;
+})();
+
+/* =====================================================================
+ * 3. 材质 / 建模工具
+ * ===================================================================== */
+const MAT = {
+  pcb: new THREE.MeshStandardMaterial({ color: 0x08131f, metalness: 0.48, roughness: 0.5 }),
+  pcbSide: new THREE.MeshStandardMaterial({ color: 0x040a12, metalness: 0.35, roughness: 0.72 }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xd4a53e, metalness: 0.94, roughness: 0.26 }),
+  goldDim: new THREE.MeshStandardMaterial({ color: 0x9c742c, metalness: 0.85, roughness: 0.36 }),
+  ceramic: new THREE.MeshStandardMaterial({ color: 0x18263a, metalness: 0.35, roughness: 0.42 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x0b1420, metalness: 0.5, roughness: 0.48 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x8b9cab, metalness: 0.9, roughness: 0.26 }),
+  slot: new THREE.MeshStandardMaterial({ color: 0x101b29, metalness: 0.3, roughness: 0.62 }),
+  glowCyan: new THREE.MeshBasicMaterial({ color: 0x58dcff, transparent: true, opacity: 0.9, depthWrite: false }),
+  glowGold: new THREE.MeshBasicMaterial({ color: 0xffc45c, transparent: true, opacity: 0.8, depthWrite: false }),
+  glowRed: new THREE.MeshBasicMaterial({ color: 0xff6264, transparent: true, opacity: 0.8, depthWrite: false }),
+  glowGreen: new THREE.MeshBasicMaterial({ color: 0x5dff9c, transparent: true, opacity: 0.8, depthWrite: false }),
+};
+
+function std(color, metalness = 0.65, roughness = 0.36, emissive = 0x000000, emissiveIntensity = 1) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness,
+    roughness,
+    emissive,
+    emissiveIntensity,
+  });
+}
+
+function outline(mesh, color = 0x65ccff, opacity = 0.72, threshold = 28) {
+  const line = new THREE.LineSegments(
+    new THREE.EdgesGeometry(mesh.geometry, threshold),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }),
+  );
+  line.userData.baseOpacity = opacity;
+  line.userData.skipHighlight = false;
+  mesh.add(line);
+  return line;
+}
+
+function box(w, h, d, material, opts = {}) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  if (opts.x !== undefined) m.position.set(opts.x, opts.y || 0, opts.z || 0);
+  if (opts.ry) m.rotation.y = opts.ry;
+  if (opts.rx) m.rotation.x = opts.rx;
+  if (opts.rz) m.rotation.z = opts.rz;
+  if (opts.outline !== false) outline(m, opts.edge || 0x60bfff, opts.edgeOpacity ?? 0.58);
+  return m;
+}
+
+function cylinder(rad, height, material, opts = {}) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, height, opts.segments || 16), material);
+  if (opts.x !== undefined) m.position.set(opts.x, opts.y || 0, opts.z || 0);
+  if (opts.rx) m.rotation.x = opts.rx;
+  if (opts.rz) m.rotation.z = opts.rz;
+  return m;
+}
+
+/* ---------- 3.1 PCB silkscreen / traces ---------- */
+function createPCBTexture() {
+  const W = 2048;
+  const H = 1706;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  const sx = (x) => ((x + 9) / 18) * W;
+  const sz = (z) => ((z + 7.5) / 15) * H;
+  let seed = 408;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+  const bg = g.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#081422');
+  bg.addColorStop(0.48, '#07111d');
+  bg.addColorStop(1, '#040b14');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+
+  // 细微噪点
+  for (let i = 0; i < 7000; i += 1) {
+    g.fillStyle = `rgba(${40 + rand() * 45},${80 + rand() * 55},${120 + rand() * 70},${0.025 + rand() * 0.05})`;
+    g.fillRect(rand() * W, rand() * H, 1 + rand() * 2, 1 + rand() * 2);
+  }
+
+  // 金色 / 青色布线
+  g.lineCap = 'round';
+  for (let i = 0; i < 52; i += 1) {
+    const x0 = rand() * W;
+    const y0 = rand() * H;
+    const gold = i % 3 === 0;
+    g.strokeStyle = gold ? `rgba(198,151,64,${0.10 + rand() * 0.18})` : `rgba(54,130,205,${0.08 + rand() * 0.15})`;
+    g.lineWidth = gold ? 2.1 : 1.4;
+    g.beginPath();
+    g.moveTo(x0, y0);
+    const x1 = Math.min(W, Math.max(0, x0 + (rand() - 0.5) * 520));
+    const y1 = Math.min(H, Math.max(0, y0 + (rand() - 0.5) * 420));
+    const midX = (x0 + x1) / 2;
+    g.lineTo(midX, y0);
+    g.lineTo(midX, y1);
+    g.lineTo(x1, y1);
+    g.stroke();
+    if (rand() > 0.55) {
+      g.fillStyle = gold ? 'rgba(220,174,80,0.32)' : 'rgba(75,166,255,0.25)';
+      g.beginPath();
+      g.arc(x1, y1, 3.5, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // 过孔阵列
+  for (let i = 0; i < 220; i += 1) {
+    g.fillStyle = rand() > 0.6 ? 'rgba(208,164,72,0.24)' : 'rgba(64,144,211,0.18)';
+    g.beginPath();
+    g.arc(rand() * W, rand() * H, 2 + rand() * 2.3, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // 主板上的关键区域框线
+  const region = (x, z, w, d, color = 'rgba(77,172,255,0.34)') => {
+    g.strokeStyle = color;
+    g.lineWidth = 3;
+    g.strokeRect(sx(x - w / 2), sz(z - d / 2), sx(x + w / 2) - sx(x - w / 2), sz(z + d / 2) - sz(z - d / 2));
+  };
+  region(-2.8, -1.6, 7.15, 7.15, 'rgba(93,190,255,0.44)');
+  region(5.15, -1.2, 1.8, 5.6, 'rgba(93,190,255,0.3)');
+  region(-2.8, 6.2, 9.1, 0.9, 'rgba(255,190,88,0.26)');
+  region(-3.3, 4.75, 6.2, 0.7, 'rgba(93,190,255,0.24)');
+  region(3.5, 3.5, 4.0, 3.8, 'rgba(93,190,255,0.34)');
+  region(-6.5, -6.35, 4.7, 1.9, 'rgba(255,190,88,0.24)');
+
+  // 丝印文字
+  const label = (text, x, z, size = 28, color = 'rgba(193,220,245,0.58)', rotate = 0) => {
+    g.save();
+    g.translate(sx(x), sz(z));
+    g.rotate(rotate);
+    g.fillStyle = color;
+    g.font = `600 ${size}px "Bahnschrift","Segoe UI",sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 0, 0);
+    g.restore();
+  };
+  label('CPU SOCKET LGA1700', -2.8, -5.25, 25);
+  label('DDR5 DIMM A1 / B1', 5.15, -4.1, 22, 'rgba(193,220,245,0.5)', Math.PI / 2);
+  label('PCIe 4.0 x16', -2.8, 5.52, 28, 'rgba(235,197,109,0.6)');
+  label('M.2 NVMe', -3.2, 4.28, 22, 'rgba(193,220,245,0.55)');
+  label('PCH', 3.5, 1.55, 30, 'rgba(193,220,245,0.48)');
+  label('SATA 6G', 7.1, 6.95, 20);
+  label('ATX 24-PIN', 7.8, 2.55, 20, 'rgba(235,197,109,0.55)');
+  label('BIOS', -6.4, 2.6, 23);
+  label('REAR I/O', -6.5, -5.35, 20);
+  label('VRM', -7.3, 0.15, 24, 'rgba(235,197,109,0.5)');
+  label('AUDIO', -6.2, 6.8, 21);
+  label('LAB-408  /  MICRO-ATX', 5.2, -6.75, 22, 'rgba(124,184,234,0.52)');
+  label('MADE FOR COMPUTER ORGANIZATION', 0, 7.1, 17, 'rgba(124,184,234,0.38)');
+
+  // 芯片组散热器安装孔
+  for (const [x, z] of [[-6.6, -3.0], [0.4, -3.0], [-6.6, 0.7], [0.4, 0.7]]) {
+    g.strokeStyle = 'rgba(190,220,245,0.24)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(sx(x), sz(z), 9, 0, Math.PI * 2);
+    g.stroke();
+  }
+
+  // 边框
+  g.strokeStyle = 'rgba(89,169,242,0.22)';
+  g.lineWidth = 4;
+  g.strokeRect(8, 8, W - 16, H - 16);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/* =====================================================================
+ * 4. 部件数据（16 项）
+ * ===================================================================== */
+const PARTS = [
+  { id: 'cpu', no: '01', cat: 'control', cn: '中央处理器', en: 'CPU · Central Processing Unit',
+    desc: '由运算器、控制器与寄存器组构成的大规模集成电路，是整机的核心，负责取指、译码与执行。',
+    exam: 'CPU = 运算器 + 控制器 + 寄存器组；主频、CPI、IPC 是衡量性能的关键指标。' },
+  { id: 'alu', no: '02', cat: 'control', cn: '算术逻辑单元', en: 'ALU · Arithmetic Logic Unit',
+    desc: '执行算术运算（加减乘除）与逻辑运算（与或非、移位），是数据加工的核心执行部件。',
+    exam: 'ALU 的核心是加法器；串行进位延迟大，并行进位（CLA）速度快，常考进位链推导。' },
+  { id: 'cu', no: '03', cat: 'control', cn: '控制单元', en: 'CU · Control Unit',
+    desc: '解析指令译码结果，产生微命令与时序信号，协调运算器、寄存器与总线的全部动作。',
+    exam: '硬布线控制器速度快、灵活性差；微程序控制器规整易扩展，是 408 简答题高频考点。' },
+  { id: 'regfile', no: '04', cat: 'control', cn: '寄存器堆', en: 'Register File',
+    desc: '由若干高速寄存器构成的阵列，存放操作数、中间结果与地址，是 CPU 中最快的存储层次。',
+    exam: '通用寄存器、地址寄存器、状态寄存器 PSW 的作用与区别；寄存器寻址速度最快。' },
+  { id: 'pc', no: '05', cat: 'control', cn: '程序计数器', en: 'PC · Program Counter',
+    desc: '存放下一条待执行指令的地址，取指后自动加 1 或按转移指令改写，决定程序执行顺序。',
+    exam: 'PC 的位数决定寻址空间；顺序执行 PC+1，遇到转移指令由 ALU / 控制器改写 PC。' },
+  { id: 'ir', no: '06', cat: 'control', cn: '指令寄存器', en: 'IR · Instruction Register',
+    desc: '存放当前正在执行的指令，其操作码字段送入控制器译码，地址字段送入 MAR 形成访存地址。',
+    exam: '指令 = 操作码 + 地址码；指令周期 = 取指周期 + 执行周期，IR 在取指阶段被写入。' },
+  { id: 'mar', no: '07', cat: 'control', cn: '存储器地址寄存器', en: 'MAR · Memory Address Register',
+    desc: '存放即将访问的内存单元地址，取指时接收 PC 的值，执行时接收地址码，位数等于地址总线宽度。',
+    exam: 'MAR 位数 = 存储单元个数的对数 = 地址总线宽度；决定最大寻址空间 2^n。' },
+  { id: 'mdr', no: '08', cat: 'control', cn: '存储器数据寄存器', en: 'MDR · Memory Data Register',
+    desc: '存放从内存读出或即将写入内存的数据，位数等于存储字长，也等于数据总线宽度。',
+    exam: 'MDR 位数 = 存储字长 = 数据总线宽度；取指时 MDR 中是指令，读数时是操作数。' },
+  { id: 'cache', no: '09', cat: 'memory', cn: '高速缓存', en: 'Cache · L1/L2/L3',
+    desc: '位于 CPU 与主存之间的小容量高速存储器，利用局部性原理缓解速度差异，命中率是关键。',
+    exam: '三种映射方式：直接映射 / 全相联 / 组相联；LRU、FIFO、随机替换策略的比较。' },
+  { id: 'ram', no: '10', cat: 'memory', cn: '内存条', en: 'RAM · Main Memory',
+    desc: '主存储器，存放运行中的程序与数据，可随机读写，断电丢失，由若干 DRAM 芯片并联构成。',
+    exam: 'DRAM 需刷新、SRAM 不需刷新；字扩展、位扩展、字位扩展的容量计算。' },
+  { id: 'rom', no: '11', cat: 'memory', cn: '固化存储器', en: 'ROM · BIOS Firmware',
+    desc: '只读存储器，固化 BIOS / 引导程序，断电不丢失，是开机后执行的第一段指令所在。',
+    exam: 'ROM 属于非易失性存储器；MROM、PROM、EPROM、EEPROM、Flash 的可擦写特性。' },
+  { id: 'bus-ctrl', no: '12', cat: 'bus', cn: '控制总线', en: 'Control Bus',
+    desc: '传输读 / 写、中断、时钟、复位等控制信号，其方向随信号而异，是「指挥系统」的神经。',
+    exam: '总线宽度、总线带宽 = 总线宽度 × 总线频率 / 一个总线周期的时钟数。' },
+  { id: 'bus-addr', no: '13', cat: 'bus', cn: '地址总线', en: 'Address Bus',
+    desc: '由 CPU 单向发出内存或 I/O 地址，宽度决定可寻址空间，n 位地址总线对应 2^n 个单元。',
+    exam: '地址总线单向传输；32 位地址总线最大寻址 4GB。' },
+  { id: 'bus-data', no: '14', cat: 'bus', cn: '数据总线', en: 'Data Bus',
+    desc: '在 CPU、内存与 I/O 之间双向传输指令与数据，宽度决定一次可交换的信息量。',
+    exam: '数据总线双向传输；总线仲裁：链式查询、计数器定时、独立请求三种方式。' },
+  { id: 'io', no: '15', cat: 'bus', cn: 'I/O 接口', en: 'I/O Interface',
+    desc: '连接外部设备的接口电路，完成数据缓冲、电平转换、状态反馈与中断请求等职能。',
+    exam: '程序查询 / 中断 / DMA 三种控制方式的对比；DMA 在传送结束时才中断 CPU。' },
+  { id: 'chipset', no: '16', cat: 'bus', cn: '主板芯片组', en: 'Chipset · PCH',
+    desc: '负责 CPU 与内存、显卡、外设之间的数据调度与协议转换，是主板的数据交通枢纽。',
+    exam: 'I/O 端口编址：统一编址（存储器映射）与独立编址（单独 I/O 指令）的区别。' },
+];
+const partById = Object.fromEntries(PARTS.map((p) => [p.id, p]));
+const CAT_NAME = {
+  control: { cn: '运算器与控制器', en: 'ALU & CONTROL' },
+  memory: { cn: '存储器', en: 'MEMORY' },
+  bus: { cn: '总线与接口', en: 'BUS & I/O' },
+};
+
+/* =====================================================================
+ * 5. 主板与静态器件
+ * ===================================================================== */
+const TOP = 0.6;
+const assembly = new THREE.Group();
+scene.add(assembly);
+const boardGroup = new THREE.Group();
+assembly.add(boardGroup);
+
+function buildBoard() {
+  const pcb = new THREE.Mesh(
+    new THREE.BoxGeometry(18, 0.5, 15),
+    [MAT.pcbSide, MAT.pcbSide, MAT.pcb, MAT.pcbSide, MAT.pcbSide, MAT.pcbSide],
+  );
+  pcb.position.y = 0.35;
+  boardGroup.add(pcb);
+
+  const silkscreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, 15),
+    new THREE.MeshStandardMaterial({
+      map: createPCBTexture(),
+      metalness: 0.28,
+      roughness: 0.52,
+      emissive: 0x071a2a,
+      emissiveIntensity: 0.5,
+    }),
+  );
+  silkscreen.rotation.x = -Math.PI / 2;
+  silkscreen.position.y = TOP + 0.006;
+  boardGroup.add(silkscreen);
+
+  const edgeGold = MAT.gold;
+  for (const [w, d, x, z] of [
+    [17.8, 0.09, 0, -7.35], [17.8, 0.09, 0, 7.35],
+    [0.09, 14.7, -8.85, 0], [0.09, 14.7, 8.85, 0],
+  ]) {
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, d), edgeGold);
+    edge.position.set(x, TOP + 0.015, z);
+    boardGroup.add(edge);
+  }
+
+  // 主板安装孔
+  for (const [x, z] of [[-8.15, -6.6], [8.15, -6.6], [-8.15, 6.6], [8.15, 6.6]]) {
+    const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.06, 16), MAT.dark);
+    hole.position.set(x, TOP + 0.035, z);
+    boardGroup.add(hole);
+    const rim = new THREE.Mesh(
+      new THREE.RingGeometry(0.22, 0.34, 20),
+      new THREE.MeshBasicMaterial({ color: 0x4a9de0, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(x, TOP + 0.07, z);
+    boardGroup.add(rim);
+  }
+
+  // CPU 插座底座
+  const socket = new THREE.Mesh(new THREE.BoxGeometry(7.1, 0.08, 7.1), MAT.slot);
+  socket.position.set(-2.8, TOP + 0.08, -1.6);
+  boardGroup.add(socket);
+  for (const [w, d, x, z] of [[7.15, 0.12, -2.8, -5.1], [7.15, 0.12, -2.8, 1.9], [0.12, 7.15, -6.35, -1.6], [0.12, 7.15, 0.75, -1.6]]) {
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), MAT.goldDim);
+    rim.position.set(x, TOP + 0.15, z);
+    boardGroup.add(rim);
+  }
+
+  // 两条 DIMM 插槽
+  for (const x of [4.8, 5.5]) {
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 4.6), MAT.slot);
+    slot.position.set(x, TOP + 0.17, -1.2);
+    boardGroup.add(slot);
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.025, 4.35), MAT.goldDim);
+    pin.position.set(x, TOP + 0.31, -1.2);
+    boardGroup.add(pin);
+    for (const z of [-3.56, 1.16]) {
+      const clip = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, 0.2), MAT.dark);
+      clip.position.set(x, TOP + 0.25, z);
+      boardGroup.add(clip);
+    }
+  }
+
+  // PCIe x16 插槽
+  const pcie = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.28, 0.42), MAT.slot);
+  pcie.position.set(-2.8, TOP + 0.16, 6.18);
+  boardGroup.add(pcie);
+  const pcieGold = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.035, 0.18), MAT.goldDim);
+  pcieGold.position.set(-2.8, TOP + 0.31, 6.18);
+  boardGroup.add(pcieGold);
+  const pcieClip = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.62), MAT.dark);
+  pcieClip.position.set(1.85, TOP + 0.25, 6.18);
+  boardGroup.add(pcieClip);
+
+  // M.2 插槽
+  const m2 = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.1, 0.14), MAT.slot);
+  m2.position.set(-3.3, TOP + 0.08, 4.75);
+  boardGroup.add(m2);
+  const m2Stand = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 12), MAT.goldDim);
+  m2Stand.position.set(0.4, TOP + 0.08, 4.75);
+  boardGroup.add(m2Stand);
+
+  // M.2 固态硬盘（静态装饰）
+  const ssd = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.055, 1.05), std(0x183a52, 0.45, 0.42, 0x071a2a, 0.55));
+  ssd.position.set(-3.1, TOP + 0.1, 4.75);
+  boardGroup.add(ssd);
+  for (let i = 0; i < 3; i += 1) {
+    const nand = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.045, 0.62), MAT.dark);
+    nand.position.set(-4.5 + i * 1.05, TOP + 0.145, 4.75);
+    boardGroup.add(nand);
+  }
+  const m2Gold = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.13), MAT.goldDim);
+  m2Gold.position.set(-5.23, TOP + 0.128, 4.75);
+  boardGroup.add(m2Gold);
+
+  // 24-pin ATX 供电
+  const atx = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.62, 2.25), MAT.slot);
+  atx.position.set(8.0, TOP + 0.33, 3.9);
+  boardGroup.add(atx);
+  const pinGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.08, 6);
+  const pins = new THREE.InstancedMesh(pinGeo, MAT.gold, 24);
+  const dummy = new THREE.Object3D();
+  let pi = 0;
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 12; col += 1) {
+      dummy.position.set(7.78 + row * 0.44, TOP + 0.67, 2.95 + col * 0.17);
+      dummy.updateMatrix();
+      pins.setMatrixAt(pi, dummy.matrix);
+      pi += 1;
+    }
+  }
+  pins.instanceMatrix.needsUpdate = true;
+  boardGroup.add(pins);
+
+  // SATA 接口
+  for (let i = 0; i < 4; i += 1) {
+    const sata = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 1.0), MAT.slot);
+    sata.position.set(7.5, TOP + 0.23, 5.55 + (i % 2) * 0.87);
+    boardGroup.add(sata);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.72), MAT.goldDim);
+    lip.position.set(7.5, TOP + 0.45, 5.55 + (i % 2) * 0.87);
+    boardGroup.add(lip);
+  }
+
+  // VRM 散热片
+  for (const [x, z, w, d] of [[-7.45, -1.6, 1.25, 4.55], [-2.8, -5.55, 4.55, 1.25]]) {
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.7, d), MAT.metal);
+    base.position.set(x, TOP + 0.42, z);
+    boardGroup.add(base);
+    outline(base, 0x77b9ff, 0.32);
+    const finCount = d > w ? 7 : 7;
+    for (let i = 0; i < finCount; i += 1) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.35, 0.06), MAT.dark);
+      fin.position.set(x, TOP + 0.78, z - d * 0.38 + i * (d * 0.76 / (finCount - 1)));
+      boardGroup.add(fin);
+    }
+  }
+
+  // 供电电感与电容
+  const chokeMat = std(0x34455c, 0.75, 0.34, 0x0a1524, 0.8);
+  for (let i = 0; i < 6; i += 1) {
+    const choke = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.38, 0.48), chokeMat);
+    choke.position.set(-6.25 + (i % 3) * 0.62, TOP + 0.25, -4.25 + Math.floor(i / 3) * 0.62);
+    boardGroup.add(choke);
+  }
+  const capBody = new THREE.InstancedMesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 0.3, 10),
+    std(0x3d4d60, 0.8, 0.28),
+    14,
+  );
+  const capTop = new THREE.InstancedMesh(
+    new THREE.CylinderGeometry(0.105, 0.105, 0.02, 10),
+    std(0x14202f, 0.4, 0.5),
+    14,
+  );
+  const capPositions = [
+    [-6.0, -3.2], [-5.2, -3.8], [-6.2, -0.1], [-5.4, 0.4],
+    [-3.9, 1.0], [-2.9, 1.1], [-1.8, 1.0], [-0.9, 0.5],
+    [0.0, -4.95], [1.0, -4.95], [-0.1, 1.35], [0.5, 1.35],
+    [-6.7, 1.2], [-6.7, 2.0],
+  ];
+  capPositions.forEach(([x, z], i) => {
+    dummy.position.set(x, TOP + 0.24, z);
+    dummy.updateMatrix();
+    capBody.setMatrixAt(i, dummy.matrix);
+    dummy.position.y = TOP + 0.4;
+    dummy.updateMatrix();
+    capTop.setMatrixAt(i, dummy.matrix);
+  });
+  capBody.instanceMatrix.needsUpdate = true;
+  capTop.instanceMatrix.needsUpdate = true;
+  boardGroup.add(capBody, capTop);
+
+  // CMOS 电池
+  const battery = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.11, 20), MAT.metal);
+  battery.position.set(2.6, TOP + 0.11, 1.2);
+  boardGroup.add(battery);
+  const batteryTop = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 20), MAT.dark);
+  batteryTop.position.set(2.6, TOP + 0.18, 1.2);
+  boardGroup.add(batteryTop);
+
+  // 风扇接口 / 小排针 / 调试灯
+  for (const [x, z] of [[0.8, 3.7], [7.5, 0.0], [-0.6, -3.9], [6.5, 5.0]]) {
+    const header = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.3, 0.2), MAT.slot);
+    header.position.set(x, TOP + 0.15, z);
+    boardGroup.add(header);
+  }
+  const ledColors = [0x40ff91, 0xffd15a, 0xff6161, 0x5bbcff];
+  ledColors.forEach((color, i) => {
+    const led = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.035, 0.08),
+      new THREE.MeshBasicMaterial({ color }),
+    );
+    led.position.set(0.5 + i * 0.16, TOP + 0.08, -3.6);
+    boardGroup.add(led);
+  });
+
+  // 主板下柔和蓝色投影
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(21, 18),
+    new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      map: (() => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const g = c.getContext('2d');
+        const grd = g.createRadialGradient(128, 128, 12, 128, 128, 128);
+        grd.addColorStop(0, 'rgba(0,0,0,0.82)');
+        grd.addColorStop(0.55, 'rgba(0,0,0,0.38)');
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+      })(),
+    }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.028;
+  scene.add(shadow);
+}
+buildBoard();
+
+/* =====================================================================
+ * 6. 部件注册 / 高亮基础设施
+ * ===================================================================== */
+const partGroups = {};
+const partBase = {};
+const partExplode = {};
+const partRadius = {};
+const partLabelOffset = {};
+const pickables = [];
+const leaderAnchors = [];
+let selectionId = null;
+let hoverId = null;
+let labelPartId = null;
+
+function makeTopLabel(text, w = 1.2, h = 0.3, color = '#bdefff') {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 512, 128);
+  g.fillStyle = 'rgba(5,15,25,0.54)';
+  g.fillRect(4, 20, 504, 88);
+  g.strokeStyle = 'rgba(103,210,255,0.4)';
+  g.lineWidth = 2;
+  g.strokeRect(4, 20, 504, 88);
+  g.fillStyle = color;
+  g.font = '700 54px "Bahnschrift","Segoe UI",sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 256, 66);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.userData.skipHighlight = true;
+  mesh.userData.skipPick = true;
+  return mesh;
+}
+
+function tagBaseState(group) {
+  group.traverse((o) => {
+    if (o.userData.skipHighlight) return;
+    if (o.isMesh && o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      o.userData.base = mats.map((m) => ({
+        color: m.color ? m.color.clone() : null,
+        emissive: m.emissive ? m.emissive.clone() : null,
+        emissiveIntensity: m.emissiveIntensity ?? 1,
+        opacity: m.opacity ?? 1,
+        transparent: !!m.transparent,
+      }));
+    }
+    if (o.isLineSegments && o.material) {
+      o.userData.baseOpacity = o.material.opacity ?? 1;
+    }
+  });
+}
+
+function registerPart(id, group, basePos, explodePos, baseRot = new THREE.Euler(), explodeRot = new THREE.Euler()) {
+  group.position.copy(basePos);
+  group.rotation.copy(baseRot);
+  tagBaseState(group);
+  group.traverse((o) => {
+    if (o.isMesh && !o.userData.skipPick) {
+      o.userData.partId = id;
+      pickables.push(o);
+    }
+    if (o.isLineSegments) o.userData.partId = id;
+  });
+  group.updateWorldMatrix(true, true);
+  const bb = new THREE.Box3().setFromObject(group);
+  const size = bb.getSize(new THREE.Vector3());
+  partRadius[id] = Math.max(0.7, Math.min(4.2, Math.max(size.x, size.y, size.z) * 0.52));
+  partLabelOffset[id] = Math.max(1.0, bb.max.y - group.position.y + 0.36);
+  assembly.add(group);
+  partGroups[id] = group;
+  partBase[id] = { pos: basePos.clone(), rot: baseRot.clone() };
+  partExplode[id] = { pos: explodePos.clone(), rot: explodeRot.clone() };
+  leaderAnchors.push({ id, anchor: basePos.clone().add(new THREE.Vector3(0, 0.28, 0)) });
+}
+
+/* =====================================================================
+ * 7. 核心部件建模
+ * ===================================================================== */
+function makeChipGroup(id, w, d, coreColor, label, basePos, explodePos, explodeRot) {
+  const g = new THREE.Group();
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.18, d), MAT.ceramic);
+  slab.position.y = 0.09;
+  g.add(slab);
+  outline(slab, 0x5bb9ff, 0.65);
+
+  const core = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.74, 0.12, d * 0.72),
+    std(coreColor, 0.38, 0.34, new THREE.Color(coreColor).multiplyScalar(0.28), 1.4),
+  );
+  core.position.y = 0.22;
+  g.add(core);
+
+  const pinMat = MAT.gold;
+  for (const s of [-1, 1]) {
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(w * 0.82, 0.045, 0.075), pinMat);
+    pin.position.set(0, 0.02, s * (d / 2 + 0.02));
+    g.add(pin);
+  }
+  if (label) {
+    const lab = makeTopLabel(label, Math.min(w * 0.9, 1.65), Math.min(d * 0.45, 0.34));
+    lab.position.y = 0.31;
+    g.add(lab);
+  }
+  registerPart(id, g, basePos, explodePos, new THREE.Euler(0, 0, 0), explodeRot);
+  return g;
+}
+
+/* ---------- 7.1 CPU 封装 ---------- */
+{
+  const g = new THREE.Group();
+  const packageBase = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.24, 6.2), MAT.ceramic);
+  packageBase.position.y = 0.12;
+  g.add(packageBase);
+  outline(packageBase, 0x79d5ff, 0.8);
+
+  const goldFrame = new THREE.Mesh(new THREE.BoxGeometry(6.38, 0.085, 6.38), MAT.goldDim);
+  goldFrame.position.y = 0.33;
+  g.add(goldFrame);
+  const inner = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.08, 6.0), MAT.dark);
+  inner.position.y = 0.375;
+  g.add(inner);
+
+  // 四个金色角标
+  for (const [x, z] of [[-2.95, -2.95], [2.95, -2.95], [-2.95, 2.95], [2.95, 2.95]]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.26), MAT.gold);
+    post.position.set(x, 0.32, z);
+    g.add(post);
+  }
+
+  // 顶盖：半透明玻璃 + 金色边框
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(6.0, 0.055, 6.0),
+    new THREE.MeshPhysicalMaterial({
+      color: 0x78d2ff,
+      transparent: true,
+      opacity: 0.075,
+      roughness: 0.06,
+      metalness: 0.0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.04,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  glass.position.y = 0.94;
+  glass.userData.skipPick = true;
+  g.add(glass);
+
+  for (const [w, d, x, z] of [[6.12, 0.075, 0, -2.97], [6.12, 0.075, 0, 2.97], [0.075, 6.12, -2.97, 0], [0.075, 6.12, 2.97, 0]]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, d), MAT.gold);
+    bar.position.set(x, 0.97, z);
+    g.add(bar);
+  }
+  const cpuTag = makeTopLabel('CPU', 1.15, 0.28, '#c8f4ff');
+  cpuTag.position.set(0, 0.995, 2.55);
+  g.add(cpuTag);
+
+  registerPart(
+    'cpu', g,
+    new THREE.Vector3(-2.8, TOP, -1.6),
+    new THREE.Vector3(-2.8, 2.0, -1.6),
+    new THREE.Euler(0, 0, 0),
+    new THREE.Euler(-0.08, 0.22, 0.04),
+  );
+}
+
+/* ---------- 7.2 CPU 内部七件套 ---------- */
+const internalDefs = [
+  ['alu', 1.9, 1.25, 0x27e0c1, 'ALU', [-4.45, 0.9, -3.0], [-5.8, 3.2, -5.0], [0.18, -0.45, 0.12]],
+  ['cu', 1.3, 1.3, 0x9a78ff, 'CU', [-0.95, 0.9, -3.0], [-0.6, 5.3, -5.2], [-0.2, 0.25, -0.1]],
+  ['regfile', 1.45, 1.45, 0xffb454, 'REG', [-2.8, 0.9, -1.4], [-6.2, 4.8, 1.2], [0.2, 0.38, 0.12]],
+  ['pc', 1.0, 0.9, 0x4dff8c, 'PC', [-4.6, 0.9, -1.2], [-4.8, 5.9, 2.8], [-0.3, -0.25, 0.22]],
+  ['ir', 1.4, 1.0, 0xff6ba6, 'IR', [-2.8, 0.9, -3.0], [-2.8, 6.4, -0.3], [0.22, 0.52, -0.16]],
+  ['mar', 0.9, 0.9, 0x62c8ff, 'MAR', [-1.15, 0.9, -1.2], [1.2, 4.6, 1.8], [-0.22, 0.3, 0.2]],
+  ['mdr', 0.9, 0.9, 0xff9d4d, 'MDR', [-4.1, 0.9, 0.2], [2.4, 3.4, 4.3], [0.28, -0.32, -0.18]],
+];
+for (const [id, w, d, color, label, p, e, rot] of internalDefs) {
+  makeChipGroup(
+    id, w, d, color, label,
+    new THREE.Vector3(...p),
+    new THREE.Vector3(...e),
+    new THREE.Euler(...rot),
+  );
+}
+
+/* ---------- 7.3 Cache ---------- */
+{
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.24, 1.6), MAT.ceramic);
+  base.position.y = 0.12;
+  g.add(base);
+  outline(base, 0x73d8ff, 0.7);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.16, 1.25), MAT.metal);
+  lid.position.y = 0.32;
+  g.add(lid);
+  const tag = makeTopLabel('CACHE', 1.55, 0.28, '#d8f6ff');
+  tag.position.y = 0.42;
+  g.add(tag);
+  for (let i = 0; i < 5; i += 1) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.11), MAT.goldDim);
+    cap.position.set(-0.75 + i * 0.38, 0.4, -0.55);
+    g.add(cap);
+  }
+  registerPart('cache', g, new THREE.Vector3(2.2, TOP, -4.35), new THREE.Vector3(4.0, 2.6, -5.7), new THREE.Euler(), new THREE.Euler(0.1, -0.35, 0.12));
+}
+
+/* ---------- 7.4 RAM 双通道内存条 ---------- */
+{
+  const g = new THREE.Group();
+  const pcbMat = std(0x10223b, 0.35, 0.52, 0x06172a, 0.5);
+  const black = MAT.dark;
+  const heatMat = std(0x293c54, 0.8, 0.3, 0x071525, 0.7);
+  const chipPositions = [];
+  for (const stickX of [-0.36, 0.36]) {
+    const stick = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 4.1), pcbMat);
+    stick.position.set(stickX, 1.4, 0);
+    g.add(stick);
+    const gold = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 4.02), MAT.gold);
+    gold.position.set(stickX, 0.23, 0);
+    g.add(gold);
+    const heat = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.88, 3.6), heatMat);
+    heat.position.set(stickX, 2.02, 0);
+    g.add(heat);
+    outline(heat, 0x5bc7ff, 0.45);
+    const light = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 3.35), new THREE.MeshBasicMaterial({
+      color: 0x55d8ff, transparent: true, opacity: 0.9,
+    }));
+    light.position.set(stickX + 0.17, 2.5, 0);
+    g.add(light);
+    for (let i = 0; i < 8; i += 1) {
+      for (const side of [-1, 1]) {
+        chipPositions.push([stickX + side * 0.095, 0.9 + (i % 4) * 0.37, -1.3 + Math.floor(i / 4) * 1.2]);
+      }
+    }
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.19, 2.56, 4.16), new THREE.MeshBasicMaterial({
+      color: 0x3d8ee8, transparent: true, opacity: 0.12, depthWrite: false,
+    }));
+    edge.position.set(stickX, 1.4, 0);
+    g.add(edge);
+  }
+  const chipGeo = new THREE.BoxGeometry(0.09, 0.3, 0.38);
+  const chips = new THREE.InstancedMesh(chipGeo, black, chipPositions.length);
+  const dummy = new THREE.Object3D();
+  chipPositions.forEach(([x, y, z], i) => {
+    dummy.position.set(x, y, z);
+    dummy.updateMatrix();
+    chips.setMatrixAt(i, dummy.matrix);
+  });
+  chips.instanceMatrix.needsUpdate = true;
+  g.add(chips);
+
+  // 侧面的 DDR5 标签
+  const tag = makeTopLabel('DDR5', 1.45, 0.25, '#dff7ff');
+  tag.rotation.set(0, Math.PI / 2, 0);
+  tag.position.set(0.54, 2.62, 0);
+  g.add(tag);
+
+  const topTag = makeTopLabel('DDR5', 1.65, 0.3, '#dff7ff');
+  topTag.position.set(0, 2.7, 0);
+  g.add(topTag);
+
+  registerPart(
+    'ram', g,
+    new THREE.Vector3(5.15, TOP, -1.2),
+    new THREE.Vector3(6.0, 3.6, -1.8),
+    new THREE.Euler(0, 0, 0),
+    new THREE.Euler(0.08, 0.2, -0.1),
+  );
+}
+
+/* ---------- 7.5 ROM ---------- */
+{
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.3, 1.35), MAT.ceramic);
+  body.position.y = 0.15;
+  g.add(body);
+  outline(body, 0xffc887, 0.65);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.05, 1.05), MAT.metal);
+  top.position.y = 0.32;
+  g.add(top);
+  const tag = makeTopLabel('BIOS', 1.2, 0.28, '#ffe3b0');
+  tag.position.y = 0.36;
+  g.add(tag);
+  for (const z of [-0.78, 0.78]) {
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.07, 0.09), MAT.gold);
+    pin.position.set(0, 0.08, z);
+    g.add(pin);
+  }
+  registerPart('rom', g, new THREE.Vector3(-6.4, TOP, 3.4), new THREE.Vector3(-5.9, 3.0, 6.0), new THREE.Euler(), new THREE.Euler(-0.15, 0.35, -0.1));
+}
+
+/* ---------- 7.6 芯片组 ---------- */
+{
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.42, 3.0), MAT.ceramic);
+  base.position.y = 0.21;
+  g.add(base);
+  outline(base, 0x6dcaff, 0.7);
+  const heat = new THREE.Mesh(new THREE.BoxGeometry(3.45, 0.16, 3.25), std(0x2c4c70, 0.9, 0.22, 0x0a1d32, 0.8));
+  heat.position.y = 0.52;
+  g.add(heat);
+  outline(heat, 0x96e4ff, 0.6);
+  for (let i = 0; i < 6; i += 1) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.13, 0.1), MAT.dark);
+    fin.position.set(0, 0.67, -1.2 + i * 0.48);
+    g.add(fin);
+  }
+  const tag = makeTopLabel('PCH', 1.0, 0.26, '#e0f6ff');
+  tag.position.set(0, 0.73, 1.15);
+  g.add(tag);
+  registerPart('chipset', g, new THREE.Vector3(3.5, TOP, 3.5), new THREE.Vector3(3.9, 2.0, 6.1), new THREE.Euler(), new THREE.Euler(0.12, -0.25, 0.14));
+}
+
+/* ---------- 7.7 I/O 接口 ---------- */
+{
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.18, 1.2), std(0x2b3441, 0.9, 0.28));
+  shell.position.y = 0.59;
+  g.add(shell);
+  outline(shell, 0x7bd6ff, 0.8);
+
+  const portMat = std(0x0a1420, 0.45, 0.62);
+  const portDefs = [
+    [-1.35, 0.46, 0.72, 0.32],
+    [-0.45, 0.46, 0.72, 0.32],
+    [0.42, 0.48, 0.72, 0.38],
+    [1.29, 0.48, 0.62, 0.38],
+  ];
+  for (const [x, y, w, h] of portDefs) {
+    const port = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), portMat);
+    port.position.set(x, y, -0.65);
+    g.add(port);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.03), MAT.metal);
+    rim.position.set(x, y, -0.72);
+    g.add(rim);
+  }
+  const net = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.42, 0.12), portMat);
+  net.position.set(1.28, 0.84, -0.65);
+  g.add(net);
+  for (const x of [-1.45, -1.05, -0.25, 0.15]) {
+    const jack = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 12), MAT.goldDim);
+    jack.rotation.x = Math.PI / 2;
+    jack.position.set(x, 0.22, -0.65);
+    g.add(jack);
+  }
+  const tag = makeTopLabel('REAR I/O', 1.45, 0.28, '#c9f5ff');
+  tag.position.set(0, 1.2, 0.12);
+  g.add(tag);
+
+  registerPart('io', g, new THREE.Vector3(-6.45, TOP, -6.15), new THREE.Vector3(-5.9, 2.4, -8.0), new THREE.Euler(), new THREE.Euler(-0.12, 0.28, -0.1));
+}
+
+/* ---------- 7.8 三根发光总线 ---------- */
+function busLabel(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 512, 128);
+  g.fillStyle = 'rgba(6,14,24,0.78)';
+  g.strokeStyle = color;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.roundRect(6, 18, 500, 92, 18);
+  g.fill();
+  g.stroke();
+  g.font = '700 48px "Bahnschrift","Segoe UI",sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = color;
+  g.fillText(text, 256, 65);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, toneMapped: false,
+  }));
+  sprite.scale.set(1.85, 0.47, 1);
+  sprite.userData.skipHighlight = true;
+  sprite.userData.skipPick = true;
+  return sprite;
+}
+
+function makeBus(id, curves, color, explodePos, explodeRot) {
+  const g = new THREE.Group();
+  for (const pts of curves) {
+    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+    const tube = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 90, 0.095, 8, false),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.93 }),
+    );
+    g.add(tube);
+    const glow = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 64, 0.27, 8, false),
+      new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.12,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    g.add(glow);
+  }
+  const label = busLabel(id.toUpperCase(), `#${new THREE.Color(color).getHexString()}`);
+  label.position.set(0, 1.6, 0);
+  label.visible = false;
+  g.add(label);
+  g.userData.explodeLabel = label;
+  registerPart(id, g, new THREE.Vector3(0, 0, 0), explodePos, new THREE.Euler(), explodeRot);
+}
+makeBus('bus-addr', [
+  [[-5.7, 0.72, 0.65], [-7.6, 0.72, 1.8], [-7.8, 0.72, 3.1], [2.2, 0.72, 3.2], [5.15, 0.72, 1.45]],
+], 0xffc247, new THREE.Vector3(0, 3.0, -3.5), new THREE.Euler(0.1, 0.08, 0));
+makeBus('bus-data', [
+  [[-2.8, 0.76, 1.45], [0.4, 0.76, 2.3], [3.0, 0.76, 1.7], [5.15, 0.76, 0.35]],
+  [[-2.8, 0.76, 1.45], [0.7, 0.76, 0.9], [3.1, 0.76, 2.2], [3.5, 0.76, 3.1]],
+], 0x4dff8c, new THREE.Vector3(0, 4.3, 0.5), new THREE.Euler(0.06, -0.12, 0));
+makeBus('bus-ctrl', [
+  [[-5.8, 0.7, -0.1], [-7.8, 0.7, -3.5], [-6.9, 0.7, -6.1]],
+  [[0.55, 0.7, -1.1], [2.6, 0.7, 1.0], [3.5, 0.7, 2.9]],
+], 0xff5d5d, new THREE.Vector3(0, 2.4, 3.8), new THREE.Euler(-0.06, 0.1, 0));
+
+/* =====================================================================
+ * 8. 选中光环 / 拆解引导线
+ * ===================================================================== */
+const halo = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 256, 256);
+  g.strokeStyle = 'rgba(112,230,255,0.9)';
+  g.lineWidth = 3;
+  g.setLineDash([12, 10]);
+  g.beginPath();
+  g.arc(128, 128, 105, 0, Math.PI * 2);
+  g.stroke();
+  g.setLineDash([]);
+  g.strokeStyle = 'rgba(112,230,255,0.35)';
+  g.lineWidth = 10;
+  g.beginPath();
+  g.arc(128, 128, 105, 0, Math.PI * 2);
+  g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, color: 0x8cecff, transparent: true, opacity: 0.8,
+    blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+  }));
+  sp.visible = false;
+  sp.scale.set(3, 3, 1);
+  scene.add(sp);
+  return sp;
+})();
+
+const leaderGeo = new THREE.BufferGeometry();
+leaderGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16 * 2 * 3), 3));
+const leaderLines = new THREE.LineSegments(
+  leaderGeo,
+  new THREE.LineBasicMaterial({
+    color: 0x3c8ac8, transparent: true, opacity: 0, depthWrite: false,
+  }),
+);
+leaderLines.frustumCulled = false;
+scene.add(leaderLines);
+
+/* =====================================================================
+ * 9. 拆解动画 / 进度
+ * ===================================================================== */
+let exploded = false;
+let animating = false;
+let progressCount = 0;
+let explodeSettleCallbacks = [];
+let doneIds = new Set();
+
+const status = {
+  get activeId() { return hoverId || selectionId; },
+};
+
+function updateProgressUI(count) {
+  progressCount = count;
+  const num = document.getElementById('progNum');
+  const done = document.getElementById('listDone');
+  const bar = document.getElementById('progBar');
+  if (num) num.textContent = count;
+  if (done) done.textContent = count;
+  if (bar) bar.style.width = `${(count / PARTS.length) * 100}%`;
+}
+
+function updateExplodeButtons() {
+  const b = document.getElementById('btn-explode');
+  const q = document.getElementById('q-explode');
+  if (b) {
+    b.classList.toggle('on', exploded);
+    const s = b.querySelector('span');
+    if (s) s.textContent = exploded ? '一键收起' : '一键拆解';
+  }
+  if (q) {
+    q.classList.toggle('on', exploded);
+    q.textContent = exploded ? '收起全部' : '拆解全部';
+  }
+}
+
+function setDot(id, on) {
+  const item = document.querySelector(`.item[data-id="${id}"]`);
+  if (!item) return;
+  const dot = item.querySelector('.dot');
+  if (dot) dot.classList.toggle('done', on);
+}
+
+function finishExplodeIfReady() {
+  if (progressCount !== PARTS.length && progressCount !== 0) return;
+  animating = false;
+  if (exploded) {
+    const cbs = explodeSettleCallbacks;
+    explodeSettleCallbacks = [];
+    cbs.forEach((cb) => cb());
+  }
+  leaderLines.material.opacity = exploded ? 0.2 : 0;
+}
+
+function setExploded(on, onSettled) {
+  if (animating) return false;
+  if (on === exploded) {
+    if (onSettled) onSettled();
+    return true;
+  }
+  if (onSettled) explodeSettleCallbacks.push(onSettled);
+  animating = true;
+  exploded = on;
+  if (!on) {
+    stopFlow();
+    leaderLines.material.opacity = 0;
+  }
+  updateExplodeButtons();
+
+  PARTS.forEach((p, i) => {
+    const g = partGroups[p.id];
+    const to = on ? partExplode[p.id] : partBase[p.id];
+    makeTween(g.position)
+      .to({ x: to.pos.x, y: to.pos.y, z: to.pos.z }, 1100)
+      .delay(i * 38)
+      .easing(EASE_IO)
+      .onComplete(() => {
+        if (on) {
+          doneIds.add(p.id);
+          setDot(p.id, true);
+          updateProgressUI(Math.min(PARTS.length, progressCount + 1));
+          if (p.id === 'cpu') {
+            const busLabelEls = ['bus-addr', 'bus-data', 'bus-ctrl'].map((id) => partGroups[id].userData.explodeLabel);
+            busLabelEls.forEach((el) => { if (el) el.visible = true; });
+          }
+        } else {
+          doneIds.delete(p.id);
+          setDot(p.id, false);
+          updateProgressUI(Math.max(0, progressCount - 1));
+          if (p.id === 'cpu') {
+            ['bus-addr', 'bus-data', 'bus-ctrl'].forEach((id) => {
+              const el = partGroups[id].userData.explodeLabel;
+              if (el) el.visible = false;
+            });
+          }
+        }
+        finishExplodeIfReady();
+      })
+      .start();
+
+    makeTween(g.rotation)
+      .to({ x: to.rot.x, y: to.rot.y, z: to.rot.z }, 1100)
+      .delay(i * 38)
+      .easing(EASE_IO)
+      .start();
+  });
+  return true;
+}
+
+// 拆解引导线每帧更新
+function updateLeaderLines() {
+  if (!leaderLines.visible) return;
+  const arr = leaderGeo.attributes.position.array;
+  let k = 0;
+  for (const { id, anchor } of leaderAnchors) {
+    const p = partGroups[id].position;
+    arr[k++] = anchor.x;
+    arr[k++] = anchor.y;
+    arr[k++] = anchor.z;
+    arr[k++] = p.x;
+    arr[k++] = p.y + 0.22;
+    arr[k++] = p.z;
+  }
+  leaderGeo.attributes.position.needsUpdate = true;
+}
+
+/* =====================================================================
+ * 10. 双向高亮
+ * ===================================================================== */
+function applyHighlight() {
+  const activeId = hoverId || selectionId;
+  for (const p of PARTS) {
+    const g = partGroups[p.id];
+    const isActive = !activeId || p.id === activeId;
+    const dim = !!activeId && p.id !== activeId;
+    g.traverse((o) => {
+      if (o.userData.skipHighlight) return;
+      if (o.isMesh && o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        const bases = o.userData.base || [];
+        mats.forEach((m, i) => {
+          const b = bases[i];
+          if (!b) return;
+          if (m.color && b.color) {
+            if (dim) m.color.copy(b.color).multiplyScalar(0.22);
+            else m.color.copy(b.color);
+          }
+          if (m.emissive && b.emissive) {
+            if (dim) {
+              m.emissive.copy(b.emissive).multiplyScalar(0.08);
+              m.emissiveIntensity = b.emissiveIntensity * 0.18;
+            } else {
+              m.emissive.copy(b.emissive);
+              m.emissiveIntensity = b.emissiveIntensity * (activeId ? 1.65 : 1);
+            }
+          }
+          if (b.transparent) {
+            m.opacity = dim ? b.opacity * 0.14 : b.opacity;
+          }
+        });
+      }
+      if (o.isLineSegments && o.material && o.userData.baseOpacity !== undefined) {
+        o.material.opacity = dim ? o.userData.baseOpacity * 0.15 : o.userData.baseOpacity;
+      }
+    });
+  }
+
+  document.querySelectorAll('.item').forEach((el) => {
+    el.classList.toggle('active', !!activeId && el.dataset.id === activeId);
+  });
+
+  const meta = activeId ? partById[activeId] : null;
+  document.getElementById('selTag').textContent = meta ? `${meta.id.toUpperCase().replace('-', ' ')} / 当前选中` : 'SYSTEM OVERVIEW';
+  document.getElementById('selCn').textContent = meta ? meta.cn : '整机总览';
+  document.getElementById('selEn').textContent = meta ? meta.en : 'SYSTEM OVERVIEW';
+  document.getElementById('selDesc').textContent = meta ? meta.desc : '微型计算机由运算器、控制器、存储器、输入 / 输出设备与系统总线构成。点击任意部件，查看其在数据通路中的作用。';
+  document.getElementById('selExam').textContent = meta ? meta.exam : '冯·诺依曼结构的核心是「存储程序」：指令与数据以同等地位存放在存储器中，并可按地址访问。';
+
+  if (meta) {
+    halo.visible = true;
+  } else {
+    halo.visible = false;
+  }
+  showPartLabel(meta ? activeId : null);
+}
+
+/* =====================================================================
+ * 11. 射线拾取 / 悬停标签
+ * ===================================================================== */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const label = document.getElementById('partLabel');
+let downPos = null;
+const tmpVec = new THREE.Vector3();
+const tmpBox = new THREE.Box3();
+
+function pickAt(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(pickables, false);
+  for (const h of hits) {
+    let o = h.object;
+    while (o && !o.userData.partId) o = o.parent;
+    if (o && o.userData.partId) return o.userData.partId;
+  }
+  return null;
+}
+
+function partCenter(id, target = new THREE.Vector3()) {
+  const g = partGroups[id];
+  tmpBox.setFromObject(g);
+  return tmpBox.getCenter(target);
+}
+
+function showPartLabel(id) {
+  if (!id) {
+    label.style.opacity = '0';
+    labelPartId = null;
+    return;
+  }
+  if (id !== labelPartId) {
+    label.innerHTML = `${partById[id].cn}<em>${partById[id].id.toUpperCase()}</em>`;
+    labelPartId = id;
+  }
+  const g = partGroups[id];
+  g.getWorldPosition(tmpVec);
+  tmpVec.y += partLabelOffset[id] || 1;
+  tmpVec.project(camera);
+  const x = (tmpVec.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-tmpVec.y * 0.5 + 0.5) * window.innerHeight;
+  label.style.left = `${x}px`;
+  label.style.top = `${y}px`;
+  label.style.opacity = '1';
+}
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  const id = pickAt(e);
+  if (id !== hoverId) {
+    hoverId = id;
+    applyHighlight();
+  }
+  renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
+});
+renderer.domElement.addEventListener('pointerleave', () => {
+  hoverId = null;
+  applyHighlight();
+  renderer.domElement.style.cursor = 'grab';
+});
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  downPos = { x: e.clientX, y: e.clientY, button: e.button };
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!downPos) return;
+  const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+  const button = downPos.button;
+  downPos = null;
+  if (moved > 6 || button !== 0) return;
+  const id = pickAt(e);
+  selectionId = id && selectionId !== id ? id : null;
+  hoverId = null;
+  applyHighlight();
+});
+
+/* =====================================================================
+ * 12. 数据流
+ * ===================================================================== */
+let flowActive = false;
+let flowGroup = null;
+let flowCurve = null;
+let flowData = null;
+let flowHead = null;
+const FLOW_PATH = ['pc', 'mar', 'ram', 'mdr', 'ir', 'cu', 'alu'];
+let currentStage = -1;
+
+function setStage(idx) {
+  if (idx === currentStage) return;
+  currentStage = idx;
+  document.querySelectorAll('.stage').forEach((el) => {
+    el.classList.toggle('on', Number(el.dataset.stage) === idx);
+  });
+}
+
+function disposeGroup(group) {
+  if (!group) return;
+  group.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+      else o.material.dispose();
+    }
+  });
+  if (group.parent) group.parent.remove(group);
+}
+
+function buildFlow() {
+  disposeGroup(flowGroup);
+  flowGroup = new THREE.Group();
+  scene.add(flowGroup);
+  scene.updateMatrixWorld(true);
+
+  const pts = FLOW_PATH.map((id) => {
+    const center = new THREE.Box3().setFromObject(partGroups[id]).getCenter(new THREE.Vector3());
+    center.y += 0.15;
+    return center;
+  });
+  flowCurve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.26);
+
+  const tube = new THREE.Mesh(
+    new THREE.TubeGeometry(flowCurve, 180, 0.045, 8, false),
+    new THREE.MeshBasicMaterial({
+      color: 0x69e8ff, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }),
+  );
+  flowGroup.add(tube);
+  const haloTube = new THREE.Mesh(
+    new THREE.TubeGeometry(flowCurve, 100, 0.16, 8, false),
+    new THREE.MeshBasicMaterial({
+      color: 0x2ca6ff, transparent: true, opacity: 0.11,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }),
+  );
+  flowGroup.add(haloTube);
+
+  const n = 120;
+  const positions = new Float32Array(n * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const dotTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.2, 'rgba(155,244,255,0.95)');
+    grd.addColorStop(0.55, 'rgba(60,180,255,0.45)');
+    grd.addColorStop(1, 'rgba(20,90,180,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const points = new THREE.Points(geo, new THREE.PointsMaterial({
+    size: 0.44, map: dotTex, color: 0xd8fbff, transparent: true, opacity: 0.98,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  flowGroup.add(points);
+
+  flowHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0xd9fbff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  flowGroup.add(flowHead);
+
+  for (const p of pts) {
+    const node = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0x8befff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    node.position.copy(p);
+    flowGroup.add(node);
+  }
+
+  flowData = { positions, n, geo };
+  flowGroup.visible = true;
+}
+
+function stopFlow() {
+  flowActive = false;
+  const btn = document.getElementById('btn-flow');
+  if (btn) btn.classList.remove('on');
+  if (flowGroup) flowGroup.visible = false;
+  setStage(-1);
+}
+
+function toggleFlow() {
+  if (flowActive) {
+    stopFlow();
+    return;
+  }
+  flowActive = true;
+  const btn = document.getElementById('btn-flow');
+  if (btn) btn.classList.add('on');
+  if (!exploded) {
+    const started = setExploded(true, () => {
+      if (flowActive) buildFlow();
+    });
+    if (!started) stopFlow();
+  } else {
+    buildFlow();
+  }
+}
+
+/* =====================================================================
+ * 13. 相机飞行 / 视角
+ * ===================================================================== */
+let cameraTween = null;
+let targetTween = null;
+let fovTween = null;
+
+function flyCamera(pos, target, dur = 1000, fov = 38) {
+  if (cameraTween) cameraTween.stop();
+  if (targetTween) targetTween.stop();
+  if (fovTween) fovTween.stop();
+  controls.autoRotate = false;
+  syncRotateButtons();
+  cameraTween = makeTween(camera.position)
+    .to({ x: pos[0], y: pos[1], z: pos[2] }, dur)
+    .easing(EASE_IO)
+    .start();
+  targetTween = makeTween(controls.target)
+    .to({ x: target[0], y: target[1], z: target[2] }, dur)
+    .easing(EASE_IO)
+    .start();
+  fovTween = makeTween(camera)
+    .to({ fov }, dur)
+    .easing(EASE_IO)
+    .onUpdate(() => camera.updateProjectionMatrix())
+    .start();
+}
+
+function syncRotateButtons() {
+  const b = document.getElementById('btn-rotate');
+  const q = document.getElementById('q-rotate');
+  if (b) b.classList.toggle('on', controls.autoRotate);
+  if (q) q.classList.toggle('on', controls.autoRotate);
+}
+
+/* =====================================================================
+ * 14. UI 绑定
+ * ===================================================================== */
+const listEl = document.getElementById('partList');
+for (const catKey of ['control', 'memory', 'bus']) {
+  const head = document.createElement('div');
+  head.className = 'cat';
+  head.innerHTML = `<i></i>${CAT_NAME[catKey].cn}<span>${CAT_NAME[catKey].en}</span>`;
+  listEl.appendChild(head);
+  for (const p of PARTS.filter((x) => x.cat === catKey)) {
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.dataset.id = p.id;
+    el.innerHTML = `<div class="no">${p.no}</div>
+      <div class="txt"><div class="cn">${p.cn}</div><div class="en">${p.en}</div></div>
+      <div class="dot"></div>`;
+    el.addEventListener('mouseenter', () => { hoverId = p.id; applyHighlight(); });
+    el.addEventListener('mouseleave', () => { hoverId = null; applyHighlight(); });
+    el.addEventListener('click', () => {
+      selectionId = selectionId === p.id ? null : p.id;
+      hoverId = null;
+      applyHighlight();
+    });
+    listEl.appendChild(el);
+  }
+}
+
+document.getElementById('btn-explode').addEventListener('click', () => setExploded(!exploded));
+document.getElementById('q-explode').addEventListener('click', () => setExploded(!exploded));
+document.getElementById('q-reset-parts').addEventListener('click', () => { if (exploded) setExploded(false); });
+document.getElementById('btn-flow').addEventListener('click', toggleFlow);
+
+function toggleRotate() {
+  controls.autoRotate = !controls.autoRotate;
+  syncRotateButtons();
+}
+document.getElementById('btn-rotate').addEventListener('click', toggleRotate);
+document.getElementById('q-rotate').addEventListener('click', toggleRotate);
+
+document.getElementById('btn-reset').addEventListener('click', () => flyCamera([19.5, 17.6, 23.0], [0, 1.9, 0], 950, 36));
+document.getElementById('q-view').addEventListener('click', () => flyCamera([19.5, 17.6, 23.0], [0, 1.9, 0], 950, 36));
+document.getElementById('btn-iso').addEventListener('click', () => flyCamera([25, 22, 25], [0, 1.6, 0], 1000, 30));
+
+controls.addEventListener('start', () => {
+  if (controls.autoRotate) {
+    controls.autoRotate = false;
+    syncRotateButtons();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    toggleFlow();
+  } else if (e.key === 'e' || e.key === 'E') {
+    setExploded(!exploded);
+  } else if (e.key === 'r' || e.key === 'R') {
+    flyCamera([19.5, 17.6, 23.0], [0, 1.9, 0], 950, 36);
+  } else if (e.key === 'i' || e.key === 'I') {
+    flyCamera([25, 22, 25], [0, 1.6, 0], 1000, 30);
+  } else if (e.key === 'Escape') {
+    selectionId = null;
+    hoverId = null;
+    applyHighlight();
+    label.style.opacity = '0';
+  }
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =====================================================================
+ * 15. 渲染循环
+ * ===================================================================== */
+let frameCount = 0;
+let fpsTime = performance.now();
+const scaleScratch = new THREE.Vector3();
+const haloScratch = new THREE.Vector3();
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  if (TWEEN.update) TWEEN.update(now);
+  controls.update();
+  camera.updateMatrixWorld();
+  showPartLabel(hoverId || selectionId);
+
+  // 选中光环跟随 + 呼吸
+  if (halo.visible) {
+    const id = hoverId || selectionId;
+    if (id) {
+      partCenter(id, haloScratch);
+      halo.position.copy(haloScratch);
+      const s = (partRadius[id] || 1) * 2.2 + Math.sin(now * 0.0035) * 0.12;
+      halo.scale.set(s, s, 1);
+      halo.material.rotation = now * 0.0003;
+    } else {
+      halo.visible = false;
+    }
+  }
+
+  // 选中 / 悬停微微放大
+  for (const p of PARTS) {
+    const g = partGroups[p.id];
+    const active = p.id === (hoverId || selectionId);
+    const s = active ? 1 + Math.sin(now * 0.004) * 0.014 : 1;
+    scaleScratch.set(s, s, s);
+    g.scale.lerp(scaleScratch, 0.12);
+  }
+
+  if (flowActive && flowCurve && flowData) {
+    const t0 = (now * 0.0001) % 1;
+    const { positions, n, geo } = flowData;
+    for (let i = 0; i < n; i += 1) {
+      const t = (t0 + i / n) % 1;
+      const p = flowCurve.getPointAt(t);
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z;
+    }
+    geo.attributes.position.needsUpdate = true;
+    const hp = flowCurve.getPointAt(t0);
+    flowHead.position.copy(hp);
+    setStage(t0 < 0.3 ? 0 : t0 < 0.64 ? 1 : 2);
+  }
+
+  if (leaderLines.material.opacity > 0.001) updateLeaderLines();
+
+  renderer.render(scene, camera);
+
+  frameCount += 1;
+  if (now - fpsTime > 500) {
+    const fps = Math.round(frameCount * 1000 / (now - fpsTime));
+    const el = document.getElementById('fpsVal');
+    if (el) el.textContent = fps;
+    frameCount = 0;
+    fpsTime = now;
+  }
+}
+
+/* =====================================================================
+ * 16. 启动
+ * ===================================================================== */
+updateProgressUI(0);
+applyHighlight();
+updateExplodeButtons();
+syncRotateButtons();
+renderer.render(scene, camera);
+requestAnimationFrame(animate);
+
+window.__APP_READY__ = true;
+if (errEl) errEl.style.display = 'none';
+if (window.__BOOT_TIMER__) clearTimeout(window.__BOOT_TIMER__);
+if (bootEl) {
+  bootEl.classList.add('hide');
+  setTimeout(() => { if (bootEl) bootEl.style.display = 'none'; }, 750);
+}
+window.__PC_VIS__ = {
+  scene, camera, controls, partGroups, PARTS,
+  setExploded, toggleFlow,
+};
+
+
+window.addEventListener('error', (event) => {
+  if (!window.__APP_READY__) showError(event.message || 'Runtime error');
+});
+window.addEventListener('unhandledrejection', (event) => {
+  if (!window.__APP_READY__) showError(event.reason?.message || String(event.reason || 'Promise rejection'));
+});
+
+</script>
+
+<script>
+/* CDN 较慢或模块加载失败时才显示错误层，不会误伤已加载成功的页面 */
+window.__BOOT_TIMER__ = setTimeout(function(){
+  if (!window.__APP_READY__) {
+    var boot = document.getElementById('boot');
+    if (boot) boot.classList.add('hide');
+    var err = document.getElementById('err');
+    if (err) err.style.display = 'flex';
+  }
+}, 15000);
+document.getElementById('errRetry').addEventListener('click', function(){ location.reload(); });
+</script>
+</body>
+</html>

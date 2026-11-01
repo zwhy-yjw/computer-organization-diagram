@@ -1,0 +1,19 @@
+# 编辑器 / IDE 本地配置（不参与 Git 提交）
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+Thumbs.db
+.DS_Store
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+
+# 依赖与构建产物（本项目无 npm 依赖，仅作兜底）
+node_modules/
+dist/
